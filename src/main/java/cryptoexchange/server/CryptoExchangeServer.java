@@ -19,9 +19,9 @@ public class CryptoExchangeServer {
             
             // Registruj servis pod imenom "CryptoExchange"
             registry.rebind("CryptoExchange", service);
-            System.out.println("[Server] ✓ Exchange service bound to RMI registry");
-            System.out.println("[Server] ✓ Ready to accept client connections");
-            System.out.println("[Server] ✓ Simulation time: 1 real second = 1 simulation minute");
+            System.out.println("[Server] Exchange service bound to RMI registry");
+            System.out.println("[Server] Ready to accept client connections");
+            System.out.println("[Server] Simulation time: 1 real second = 1 simulation minute");
             System.out.println("[Server] Press Ctrl+C to shutdown");
             
             // Cekaj za shutdown
@@ -35,7 +35,7 @@ public class CryptoExchangeServer {
                 Thread.sleep(1000);
             }
         } catch (Exception e) {
-            System.err.println("[Server] ✗ Fatal error: " + e.getMessage());
+            System.err.println("[Server] Fatal error: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
         }
