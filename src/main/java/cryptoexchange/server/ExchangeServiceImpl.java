@@ -259,13 +259,25 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
                     String.format("Insufficient funds: need $%.2f, have $%.2f", totalCost, account.getBalance()));
             }
         } 
-        // Provera količine za SELL order
+        // Provera kolicine za SELL order
         else {
             double available = account.getAssetBalance(request.getSymbol());
             if (available < request.getQuantity()) {
                 return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
                     String.format("Insufficient asset: need %.4f, have %.4f", request.getQuantity(), available));
             }
+        }
+        
+        // Validacija minimalne cene
+        if (request.getPrice() < 0.01) {
+            return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
+                "Cena mora biti veca od $0.01");
+        }
+        
+        // Validacija kolicine
+        if (request.getQuantity() <= 0 || request.getQuantity() > 1000000) {
+            return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
+                "Neispravna kolicina (min: 0.0001, max: 1,000,000)");
         }
         
         // Kreiraj i dodaj order u order book
@@ -286,7 +298,9 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
     
     @Override
     public List<Trade> getTradeHistory(String symbol, long simulationDayStart) throws RemoteException {
-        long dayEnd = simulationDayStart + 24 * 60; // 24 sata = 1440 minuta
+    	System.out.printf("[Server] Zahtev za istorijom trgovina: %s, dan %d (start: %d min)%n",
+    	        symbol, simulationDayStart / (24 * 60), simulationDayStart);
+    	long dayEnd = simulationDayStart + 24 * 60; // 24 sata = 1440 minuta
         
         return tradeHistory.stream()
             .filter(trade -> trade.getSymbol().equalsIgnoreCase(symbol))

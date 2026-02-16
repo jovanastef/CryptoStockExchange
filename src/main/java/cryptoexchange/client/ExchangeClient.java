@@ -164,7 +164,7 @@ public class ExchangeClient {
         
         System.out.println("\n" + ConsoleColors.GREEN + "Connected | Client ID: " + 
             clientId.substring(0, 8) + "..." + ConsoleColors.RESET);
-        System.out.println("Commands: watch <symbol>, orders <symbol> <bid/ask>, buy <sym> <price> <qty>, sell <sym> <price> <qty>, trades <symbol>, exit");
+        System.out.println("Commands: watch <symbol>, book <symbol>, buy <sym> <price> <qty>, sell <sym> <price> <qty>, trades <symbol> [dan], exit");
     }
     
     private void renderInstrumentRow(Instrument inst) {
@@ -206,15 +206,30 @@ public class ExchangeClient {
                 case "watch":
                     if (parts.length > 1) watchInstrument(parts[1]);
                     break;
-                case "orders":
-                    if (parts.length > 2) showOrderBook(parts[1], parts[2]);
+                case "book":
+                    if (parts.length > 1) showFullOrderBook(parts[1]);
                     break;
                 case "buy":
                 case "sell":
                     if (parts.length == 4) placeOrder(parts[0], parts[1], parts[2], parts[3]);
                     break;
                 case "trades":
-                    if (parts.length > 1) showTradeHistory(parts[1]);
+                    if (parts.length > 1) {
+                        long dayStart = 0;
+                        if (parts.length > 2) {
+                            try {
+                                int dayNumber = Integer.parseInt(parts[2]);
+                                dayStart = dayNumber * 24 * 60; // Pretvori u minute
+                                System.out.println(ConsoleColors.CYAN + 
+                                    "Searching trades for day " + dayNumber + 
+                                    " (timestamp: " + dayStart + " min)" + ConsoleColors.RESET);
+                            } catch (NumberFormatException e) {
+                                System.out.println(ConsoleColors.RED + 
+                                    "Invalid day format. Using day 0." + ConsoleColors.RESET);
+                            }
+                        }
+                        showTradeHistory(parts[1], dayStart);
+                    }
                     break;
                 default:
                     System.out.println(ConsoleColors.RED + "Unknown command" + ConsoleColors.RESET);
@@ -244,6 +259,58 @@ public class ExchangeClient {
             }
         } catch (Exception e) {
             System.err.println(ConsoleColors.RED + "Error: " + e.getMessage() + ConsoleColors.RESET);
+        }
+    }
+    
+    private void showFullOrderBook(String symbol) {
+        try {
+            // Dohvati obe strane order book-a
+            OrderBookData bidsData = exchangeService.getOrderBook(symbol.toUpperCase(), OrderBookData.Side.BID);
+            OrderBookData asksData = exchangeService.getOrderBook(symbol.toUpperCase(), OrderBookData.Side.ASK);
+            
+            System.out.println("\n" + ConsoleColors.CYAN + 
+                "=== ORDER BOOK: " + symbol.toUpperCase() + " ===" + ConsoleColors.RESET);
+            System.out.println(String.format("%12s %15s %12s | %12s %15s %12s", 
+                "BID PRICE", "BID QTY", "CUMULATIVE", "|", "ASK PRICE", "ASK QTY", "CUMULATIVE"));
+            System.out.println("---------------------------------------------------------------");
+            
+            // Pripremi podatke za prikaz (max 5 redova po strani)
+            List<Order> bids = bidsData.getOrders().stream().limit(5).toList();
+            List<Order> asks = asksData.getOrders().stream().limit(5).toList();
+            
+            // Izracunaj maksimalnu duzinu za centriranje
+            int maxRows = Math.max(bids.size(), asks.size());
+            double cumBid = 0.0;
+            double cumAsk = 0.0;
+            
+            for (int i = 0; i < maxRows; i++) {
+                // BID strana (desno poravnato)
+                if (i < bids.size()) {
+                    Order bid = bids.get(i);
+                    cumBid += bid.getQuantity();
+                    System.out.printf("%12.2f %15.4f %12.4f | ", 
+                        bid.getPrice(), bid.getQuantity(), cumBid);
+                } else {
+                    System.out.print("                                  | ");
+                }
+                
+                // ASK strana (levo poravnato)
+                if (i < asks.size()) {
+                    Order ask = asks.get(i);
+                    cumAsk += ask.getQuantity();
+                    System.out.printf("%12.2f %15.4f %12.4f%n", 
+                        ask.getPrice(), ask.getQuantity(), cumAsk);
+                } else {
+                    System.out.println();
+                }
+            }
+            
+            // Rezime
+            System.out.println("---------------------------------------------------------------");
+            System.out.printf(ConsoleColors.YELLOW + "UKUPNO: %d BID naloga | %d ASK naloga" + ConsoleColors.RESET + "%n",
+                bidsData.getOrders().size(), asksData.getOrders().size());
+        } catch (Exception e) {
+            System.err.println(ConsoleColors.RED + "Greška pri prikazu order book-a: " + e.getMessage() + ConsoleColors.RESET);
         }
     }
     
@@ -287,25 +354,38 @@ public class ExchangeClient {
         }
     }
     
-    private void showTradeHistory(String symbol) {
-        try {
-            List<Trade> trades = exchangeService.getTradeHistory(symbol.toUpperCase(), 0);
-            System.out.println("\n=== TRADE HISTORY FOR " + symbol.toUpperCase() + " ===");
-            System.out.println(String.format("%8s %12s %15s %12s", "TIME", "PRICE", "QUANTITY", "PARTIES"));
-            System.out.println("--------------------------------------------------");
-            
-            trades.stream().limit(15).forEach(trade -> 
-                System.out.printf("%8s %12.2f %15.4f %s → %s%n",
-                    formatTime(trade.getTimestamp()),
-                    trade.getPrice(),
-                    trade.getQuantity(),
-                    trade.getBuyerId().substring(0, 6),
-                    trade.getSellerId().substring(0, 6))
-            );
-        } catch (Exception e) {
-            System.err.println(ConsoleColors.RED + "Error: " + e.getMessage() + ConsoleColors.RESET);
-        }
-    }
+	 private void showTradeHistory(String symbol, long dayStart) {
+	     try {
+	         List<Trade> trades = exchangeService.getTradeHistory(symbol.toUpperCase(), dayStart);
+	         int dayNumber = (int) (dayStart / (24 * 60));
+	         
+	         System.out.println("\n" + ConsoleColors.CYAN + 
+	             "=== TRGOVINE ZA " + symbol.toUpperCase() + " - DAN " + dayNumber + " ===" + ConsoleColors.RESET);
+	         
+	         if (trades.isEmpty()) {
+	             System.out.println(ConsoleColors.YELLOW + "Nema trgovina za izabrani dan" + ConsoleColors.RESET);
+	             return;
+	         }
+	         
+	         System.out.println(String.format("%8s %12s %15s %12s %15s", 
+	             "VREME", "CENA", "KOLICINA", "KUPAC", "PRODAVAC"));
+	         System.out.println("------------------------------------------------------------------");
+	         
+	         trades.stream().limit(20).forEach(trade -> 
+	             System.out.printf("%8s %12.2f %15.4f %12s %15s%n",
+	                 formatTime(trade.getTimestamp()),
+	                 trade.getPrice(),
+	                 trade.getQuantity(),
+	                 trade.getBuyerId().substring(0, 6) + "...",
+	                 trade.getSellerId().substring(0, 6) + "...")
+	         );
+	         
+	         System.out.println(ConsoleColors.GREEN + 
+	             "Prikazano " + trades.size() + " trgovina (maks. 20)" + ConsoleColors.RESET);
+	     } catch (Exception e) {
+	         System.err.println(ConsoleColors.RED + "Greška: " + e.getMessage() + ConsoleColors.RESET);
+	     }
+	 }
     
     private String formatTime(long minutes) {
         int hours = (int) (minutes / 60) % 24;

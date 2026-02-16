@@ -28,7 +28,7 @@ public class AutoTraderClient {
     
     // Konfiguracija ponasanja
     private static final double BUY_PROBABILITY = 0.65; // 65% sanse za kupovinu
-    private static final double MAX_PRICE_OFFSET = 0.03; // ±3% od trenutne cene
+    private static final double MAX_PRICE_OFFSET = 0.01; // ±1% od trenutne cene
     private static final int MIN_DELAY_SEC = 4;
     private static final int MAX_DELAY_SEC = 12;
 
@@ -70,7 +70,7 @@ public class AutoTraderClient {
 
     private void generateAndPlaceOrder() {
         try {
-            // Dohvati trenutno stanje trzista
+            // Dohvati trenutno stanje trzista I order book
             MarketSnapshot snapshot = exchangeService.getMarketSnapshot();
             if (snapshot.getInstruments().isEmpty()) return;
 
@@ -87,14 +87,35 @@ public class AutoTraderClient {
             // Odluci BUY/SELL (vise kupovina za aktivnije trziste)
             Order.Side side = (random.nextDouble() < BUY_PROBABILITY) ? Order.Side.BUY : Order.Side.SELL;
 
-            // Izracunaj cenu sa malim offsetom
-            double priceOffset = (random.nextDouble() * 2 - 1) * MAX_PRICE_OFFSET;
-            double orderPrice = currentPrice * (1 + priceOffset);
+            // Pametno odredjivanje cene na osnovu order book-a
+            double orderPrice;
+            try {
+                OrderBookData bookData = exchangeService.getOrderBook(symbol, 
+                    side == Order.Side.BUY ? OrderBookData.Side.ASK : OrderBookData.Side.BID);
+                
+                if (!bookData.getOrders().isEmpty()) {
+                    // Ako postoji order book, koristi najbolju cenu sa suprotne strane
+                    double bestPrice = bookData.getOrders().get(0).getPrice();
+                    double adjustment = side == Order.Side.BUY ? -0.001 : 0.001; // 0.1% prilagod
+                    orderPrice = bestPrice * (1 + adjustment);
+                } else {
+                    // Ako nema order book-a, koristi trenutnu cenu sa malim offsetom
+                    double priceOffset = (random.nextDouble() * 2 - 1) * MAX_PRICE_OFFSET;
+                    orderPrice = currentPrice * (1 + priceOffset);
+                }
+            } catch (Exception e) {
+                // Fallback na nasumicnu cenu ako ne uspe dohvatanje order book-a
+                double priceOffset = (random.nextDouble() * 2 - 1) * MAX_PRICE_OFFSET;
+                orderPrice = currentPrice * (1 + priceOffset);
+            }
             
-            // Odredi kolicinu prema instrumentu
+            // Zastita od negativnih cena
+            orderPrice = Math.max(0.01, orderPrice);
+            
+            // Odredi kolicinu prema instrumentu i strani
             double quantity = calculateQuantity(symbol, side, currentPrice);
 
-            // Kreiraj i pošalji nalog
+            // Kreiraj i posalji nalog
             OrderRequest request = new OrderRequest(clientId, symbol, side, orderPrice, quantity);
             OrderConfirmation confirmation = exchangeService.placeOrder(request);
 
@@ -107,12 +128,11 @@ public class AutoTraderClient {
                     symbol,
                     quantity,
                     orderPrice,
-                    Math.abs(priceOffset) * 100,
+                    Math.abs((orderPrice - currentPrice) / currentPrice) * 100,
                     confirmation.getOrderId().substring(0, 6)
                 );
             } else if (!confirmation.getReason().contains("Insufficient")) {
-                // Loguj samo znacajne odbijene naloge (ignorisi "Insufficient funds" jer je cesto)
-                System.out.printf("[%s] Rejected %s %s: %s%n",
+                System.out.printf("[%s] Odbijen %s %s: %s%n",
                     traderName,
                     (side == Order.Side.BUY) ? "BUY" : "SELL",
                     symbol,
@@ -120,7 +140,6 @@ public class AutoTraderClient {
                 );
             }
         } catch (Exception e) {
-            // Ne prekida rad, samo loguj gresku
             if (!e.getMessage().contains("Connection refused")) {
                 System.err.printf("[%s] Error: %s%n", traderName, e.getMessage());
             }
