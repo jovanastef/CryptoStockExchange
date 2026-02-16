@@ -303,10 +303,32 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
     }
     
     public void shutdown() {
-        simulationScheduler.shutdown();
-        broadcaster.shutdown();
-        tradeArchiver.shutdown();
-        System.out.println("[Server] Exchange service shutdown complete");
+        System.out.println("[Server] Shutting down simulation engine...");
+        
+        // Zaustavi scheduler prvo
+        if (simulationScheduler != null && !simulationScheduler.isShutdown()) {
+            simulationScheduler.shutdown();
+            try {
+                if (!simulationScheduler.awaitTermination(3, TimeUnit.SECONDS)) {
+                    simulationScheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                simulationScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        // Zatvori TCP broadcaster
+        if (broadcaster != null) {
+            broadcaster.shutdown();
+        }
+        
+        // Zaustavi archiver (sa cekanjem da se isprazni red)
+        if (tradeArchiver != null) {
+            tradeArchiver.shutdown();
+        }
+        
+        System.out.println("[Server] All resources released");
     }
     
     // Interna klasa za order book

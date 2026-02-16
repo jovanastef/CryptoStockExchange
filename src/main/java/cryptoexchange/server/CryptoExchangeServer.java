@@ -4,10 +4,10 @@ import cryptoexchange.rmi.ExchangeServiceInterface;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-
 //Glavna klasa za pokretanje RMI servera
 
 public class CryptoExchangeServer {
+	private static ExchangeServiceImpl serviceImpl; // cuvam referencu na implementaciju
     public static void main(String[] args) {
         try {
             // Kreiraj RMI registry na portu 1099
@@ -15,10 +15,10 @@ public class CryptoExchangeServer {
             System.out.println("[Server] RMI registry created on port 1099");
             
             // Instanciraj servis
-            ExchangeServiceInterface service = new ExchangeServiceImpl();
+            serviceImpl = new ExchangeServiceImpl();
             
             // Registruj servis pod imenom "CryptoExchange"
-            registry.rebind("CryptoExchange", service);
+            registry.rebind("CryptoExchange", serviceImpl);
             System.out.println("[Server] Exchange service bound to RMI registry");
             System.out.println("[Server] Ready to accept client connections");
             System.out.println("[Server] Simulation time: 1 real second = 1 simulation minute");
@@ -27,7 +27,9 @@ public class CryptoExchangeServer {
             // Cekaj za shutdown
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("\n[Server] Shutting down gracefully...");
+                if (serviceImpl != null) {
                 System.out.println("[Server] Shutdown complete");
+                }
             }));
             
             // Beskonacna petlja da server ostane aktivan
@@ -37,6 +39,12 @@ public class CryptoExchangeServer {
         } catch (Exception e) {
             System.err.println("[Server] Fatal error: " + e.getMessage());
             e.printStackTrace();
+            
+         // Pokusaj cleanup cak i pri gresci
+            if (serviceImpl != null) {
+                serviceImpl.shutdown();
+            }
+            
             System.exit(1);
         }
     }
