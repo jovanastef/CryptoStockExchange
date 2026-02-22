@@ -87,26 +87,14 @@ public class AutoTraderClient {
             // Odluci BUY/SELL (vise kupovina za aktivnije trziste)
             Order.Side side = (random.nextDouble() < BUY_PROBABILITY) ? Order.Side.BUY : Order.Side.SELL;
 
-            // Pametno odredjivanje cene na osnovu order book-a
+            // Nova logika za agresivnije cene koja omogucava preklapanje i izvrsavanje trgovina
             double orderPrice;
-            try {
-                OrderBookData bookData = exchangeService.getOrderBook(symbol, 
-                    side == Order.Side.BUY ? OrderBookData.Side.ASK : OrderBookData.Side.BID);
-                
-                if (!bookData.getOrders().isEmpty()) {
-                    // Ako postoji order book, koristi najbolju cenu sa suprotne strane
-                    double bestPrice = bookData.getOrders().get(0).getPrice();
-                    double adjustment = side == Order.Side.BUY ? -0.001 : 0.001; // 0.1% prilagod
-                    orderPrice = bestPrice * (1 + adjustment);
-                } else {
-                    // Ako nema order book-a, koristi trenutnu cenu sa malim offsetom
-                    double priceOffset = (random.nextDouble() * 2 - 1) * MAX_PRICE_OFFSET;
-                    orderPrice = currentPrice * (1 + priceOffset);
-                }
-            } catch (Exception e) {
-                // Fallback na nasumicnu cenu ako ne uspe dohvatanje order book-a
-                double priceOffset = (random.nextDouble() * 2 - 1) * MAX_PRICE_OFFSET;
-                orderPrice = currentPrice * (1 + priceOffset);
+            if (side == Order.Side.BUY) {
+                // Kupac nudi od -0.5% do +1.5% trenutne cene (cesto nudi VISE od trzisne)
+                orderPrice = currentPrice * (1 + (random.nextDouble() * 0.02 - 0.005)); 
+            } else {
+                // Prodavac nudi od -1.5% do +0.5% trenutne cene (cesto nudi NIZE od trzisne)
+                orderPrice = currentPrice * (1 + (random.nextDouble() * 0.02 - 0.015)); 
             }
             
             // Zastita od negativnih cena
@@ -121,7 +109,7 @@ public class AutoTraderClient {
 
             // Loguj rezultat
             if (confirmation.getStatus() == OrderConfirmation.Status.ACCEPTED) {
-                String action = (side == Order.Side.BUY) ? "🟢 BUY" : "🔴 SELL";
+                String action = (side == Order.Side.BUY) ? "BUY" : "SELL";
                 System.out.printf("[%s] %s %s %.4f @ $%.2f | Vol: %.2f%% | ID: %s%n",
                     traderName,
                     action,

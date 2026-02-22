@@ -53,6 +53,9 @@ public class ExchangeClient {
             tcpOut.println("SUBSCRIBE|" + symbols);
             System.out.println(ConsoleColors.CYAN + "Subscribed to market data" + ConsoleColors.RESET);
             
+         // Cekaj 500ms da se server pripremi za slanje
+            try { Thread.sleep(500); } catch (InterruptedException e) {}
+            
             String line;
             while (running && (line = tcpIn.readLine()) != null) {
                 if (line.startsWith("UPDATE|")) {
@@ -74,7 +77,7 @@ public class ExchangeClient {
     private void parseAndUpdateInstrument(String line) {
         try {
             String[] parts = line.substring(7).split("\\|");
-            if (parts.length < 7) return;
+            if (parts.length < 6) return;
             
             currentSimulationTime = Long.parseLong(parts[1]); // Azuriraj globalno vreme
             
@@ -98,7 +101,7 @@ public class ExchangeClient {
             if (parts.length < 6) return;
             
             if (trackedInstruments.containsKey(parts[0])) {
-                String notification = String.format("TRADE: %s %.4f @ $%.2f (%s → %s)",
+                String notification = String.format("TRADE: %s %.4f @ $%.2f (%s -> %s)",
                     parts[0], Double.parseDouble(parts[3]), Double.parseDouble(parts[2]), parts[5], parts[4]);
                 tradeNotifications.add(notification);
                 while (tradeNotifications.size() > 5) {
@@ -117,7 +120,7 @@ public class ExchangeClient {
             while (running) {
                 try {
                     renderMarketData();
-                    Thread.sleep(500);
+                    Thread.sleep(3000);
                 } catch (InterruptedException e) {
                     break;
                 }
@@ -172,28 +175,34 @@ public class ExchangeClient {
         double ch24h = inst.getChange24h();
         double ch7d = inst.getChange7d();
         
+        // Boje zavisno od smera promene
         String color1h = ch1h >= 0 ? ConsoleColors.GREEN : ConsoleColors.RED;
-        String arrow1h = ch1h >= 0 ? ConsoleColors.ARROW_UP : ConsoleColors.ARROW_DOWN;
-        String sign1h = ch1h >= 0 ? "+" : "";
-        
         String color24h = ch24h >= 0 ? ConsoleColors.GREEN : ConsoleColors.RED;
-        String arrow24h = ch24h >= 0 ? ConsoleColors.ARROW_UP : ConsoleColors.ARROW_DOWN;
-        String sign24h = ch24h >= 0 ? "+" : "";
-        
         String color7d = ch7d >= 0 ? ConsoleColors.GREEN : ConsoleColors.RED;
-        String arrow7d = ch7d >= 0 ? ConsoleColors.ARROW_UP : ConsoleColors.ARROW_DOWN;
-        String sign7d = ch7d >= 0 ? "+" : "";
         
+        // STRELICE UMESTO ZNAKOVA +/-
+       // String arrow1h = ch1h >= 0 ? ConsoleColors.ARROW_UP : ConsoleColors.ARROW_DOWN;
+       // String arrow24h = ch24h >= 0 ? ConsoleColors.ARROW_UP : ConsoleColors.ARROW_DOWN;
+       // String arrow7d = ch7d >= 0 ? ConsoleColors.ARROW_UP : ConsoleColors.ARROW_DOWN;
+        
+        // Formatiraj ime ako je predugacko
         String name = inst.getName();
         if (name.length() > 14) name = name.substring(0, 13) + "…";
         
-        System.out.printf("%-6s %-15s %12.2f %s%9.2f%%%s %s%9.2f%%%s %s%9.2f%%%s%n",
+        // PRIKAZ SA STRELICAMA BEZ ZNAKOVA +/-
+        //System.out.printf("%-6s %-15s %12.2f %s%s%7.2f%%%s %s%s%7.2f%%%s %s%s%7.2f%%%s%n",
+     // Koristi %+9.2f za automatski prikaz + ili - znaka
+        System.out.printf("%-6s %-15s %12.2f %s%+9.2f%%%s %s%+9.2f%%%s %s%+9.2f%%%s%n",
             inst.getSymbol(),
             name,
             inst.getCurrentPrice(),
-            color1h, sign1h + ch1h, ConsoleColors.RESET,
-            color24h, sign24h + ch24h, ConsoleColors.RESET,
-            color7d, sign7d + ch7d, ConsoleColors.RESET);
+            color1h, ch1h, ConsoleColors.RESET,
+            color24h, ch24h, ConsoleColors.RESET,
+            color7d, ch7d, ConsoleColors.RESET
+            //color1h, arrow1h, Math.abs(ch1h), ConsoleColors.RESET,
+            //color24h, arrow24h, Math.abs(ch24h), ConsoleColors.RESET,
+            //color7d, arrow7d, Math.abs(ch7d), ConsoleColors.RESET
+        );
     }
     
     private void processCommand(String line) {
@@ -307,10 +316,10 @@ public class ExchangeClient {
             
             // Rezime
             System.out.println("---------------------------------------------------------------");
-            System.out.printf(ConsoleColors.YELLOW + "UKUPNO: %d BID naloga | %d ASK naloga" + ConsoleColors.RESET + "%n",
+            System.out.printf(ConsoleColors.YELLOW + "Total: %d BID order | %d ASK order" + ConsoleColors.RESET + "%n",
                 bidsData.getOrders().size(), asksData.getOrders().size());
         } catch (Exception e) {
-            System.err.println(ConsoleColors.RED + "Greška pri prikazu order book-a: " + e.getMessage() + ConsoleColors.RESET);
+            System.err.println(ConsoleColors.RED + "Display order book error: " + e.getMessage() + ConsoleColors.RESET);
         }
     }
     
@@ -360,15 +369,15 @@ public class ExchangeClient {
 	         int dayNumber = (int) (dayStart / (24 * 60));
 	         
 	         System.out.println("\n" + ConsoleColors.CYAN + 
-	             "=== TRGOVINE ZA " + symbol.toUpperCase() + " - DAN " + dayNumber + " ===" + ConsoleColors.RESET);
+	             "=== TRADES FOR " + symbol.toUpperCase() + " - DAY " + dayNumber + " ===" + ConsoleColors.RESET);
 	         
 	         if (trades.isEmpty()) {
-	             System.out.println(ConsoleColors.YELLOW + "Nema trgovina za izabrani dan" + ConsoleColors.RESET);
+	             System.out.println(ConsoleColors.YELLOW + "No trades for the selected day" + ConsoleColors.RESET);
 	             return;
 	         }
 	         
 	         System.out.println(String.format("%8s %12s %15s %12s %15s", 
-	             "VREME", "CENA", "KOLICINA", "KUPAC", "PRODAVAC"));
+	             "TIME", "PRICE", "QUANTITY", "BUYER", "SELLER"));
 	         System.out.println("------------------------------------------------------------------");
 	         
 	         trades.stream().limit(20).forEach(trade -> 
@@ -381,9 +390,9 @@ public class ExchangeClient {
 	         );
 	         
 	         System.out.println(ConsoleColors.GREEN + 
-	             "Prikazano " + trades.size() + " trgovina (maks. 20)" + ConsoleColors.RESET);
+	             "Shown " + trades.size() + " trades (max 20)" + ConsoleColors.RESET);
 	     } catch (Exception e) {
-	         System.err.println(ConsoleColors.RED + "Greška: " + e.getMessage() + ConsoleColors.RESET);
+	         System.err.println(ConsoleColors.RED + "Error: " + e.getMessage() + ConsoleColors.RESET);
 	     }
 	 }
     
@@ -412,6 +421,7 @@ public class ExchangeClient {
     }
     
     public static void main(String[] args) {
+    	//System.setProperty("file.encoding", "UTF-8");
         try {
             String clientName = (args.length > 0) ? args[0] : "Trader-" + new Random().nextInt(1000);
             ExchangeClient client = new ExchangeClient(clientName);

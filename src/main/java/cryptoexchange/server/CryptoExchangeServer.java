@@ -21,7 +21,7 @@ public class CryptoExchangeServer {
             registry.rebind("CryptoExchange", serviceImpl);
             System.out.println("[Server] Exchange service bound to RMI registry");
             System.out.println("[Server] Ready to accept client connections");
-            System.out.println("[Server] Simulation time: 1 real second = 1 simulation minute");
+            System.out.println("[Server] Simulation time: " +  (ExchangeServiceImpl.SIMULATION_TICK_MS / 1000) + " real seconds = 1 simulation minute");
             System.out.println("[Server] Press Ctrl+C to shutdown");
             
             // Cekaj za shutdown

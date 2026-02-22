@@ -1,0 +1,15 @@
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\server\ExchangeServiceImpl.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\OrderConfirmation.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\Trade.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\rmi\ExchangeServiceInterface.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\OrderRequest.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\OrderBookData.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\client\ExchangeClient.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\MarketSnapshot.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\util\ConsoleColors.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\server\CryptoExchangeServer.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\client\AutoTraderClient.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\Order.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\model\Instrument.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\server\MarketDataBroadcaster.java
+C:\Users\stefj\eclipse-workspace\crypto-exchange\src\main\java\cryptoexchange\server\TradeArchiver.java

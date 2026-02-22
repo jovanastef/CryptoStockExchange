@@ -18,7 +18,7 @@ public class ConsoleColors {
     public static final String GREEN_BOLD = "\033[1;32m";
     
     // Simboli
-    public static final String ARROW_UP = "↑";
-    public static final String ARROW_DOWN = "↓";
-    public static final String ARROW_STABLE = "→";
+    public static final String ARROW_UP = "▲";
+    public static final String ARROW_DOWN = "▼";
+    public static final String ARROW_STABLE = "-";
 }

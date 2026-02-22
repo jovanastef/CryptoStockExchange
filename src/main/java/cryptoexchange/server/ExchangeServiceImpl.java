@@ -33,8 +33,8 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
     private final ScheduledExecutorService simulationScheduler;
     private final AtomicLong simulationTimeMinutes = new AtomicLong(0);
     
-    // Konfiguracija simulacije: 1 realna sekunda = 1 simulacioni minut
-    private static final long SIMULATION_TICK_MS = 1000; // 1 sekunda
+    // Konfiguracija simulacije: 5 realna sekunda = 1 simulacioni minut
+    public static final long SIMULATION_TICK_MS = 5000; // 5 sekundi
     
     protected ExchangeServiceImpl() throws RemoteException {
         super();
@@ -52,10 +52,11 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
         
         System.out.println("[Server] Exchange service initialized with " + instruments.size() + " instruments");
         System.out.println("[Server] Market data broadcast on TCP port 9090");
-        System.out.println("[Server] Simulation speed: 1 real second = 1 simulation minute");
+        System.out.println("[Server] Simulation speed: " + (SIMULATION_TICK_MS / 1000) +
+        		                  " real seconds = 1 simulation minute");
     }
     
-    //Inicijalizuje 12+ kripto instrumenata sa realnim početnim cenama
+    //Inicijalizuje 12 kripto instrumenata sa realnim početnim cenama
     private void initializeInstruments() {
         // Realne pocetne cene sa CoinMarketCap
         addInstrument("BTC", "Bitcoin", 68883.07);
@@ -132,8 +133,21 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
     
     private void matchOrders() {
         orderBooks.values().forEach(orderBook -> {
-            List<Order> bids = orderBook.getBids();
-            List<Order> asks = orderBook.getAsks();
+        	synchronized (orderBook) {
+        		List<Order> bids = orderBook.getBids();
+        		List<Order> asks = orderBook.getAsks();
+        		
+          //  if (!bids.isEmpty() && !asks.isEmpty()) {
+            //    double bestBid = bids.get(0).getPrice();
+              //  double bestAsk = asks.get(0).getPrice();
+                //if (bestBid < bestAsk) {
+                    // Ispisuj ovo samo povremeno da ne zatrpas konzolu
+                  //  if (Math.random() < 0.1) { 
+                    //    System.out.printf("[Debug] %s: Kupac nudi $%.2f, Prodavac traži $%.2f (Nema preklapanja)%n", 
+                      //      orderBook.getSymbol(), bestBid, bestAsk);
+                  //  }
+             //   }
+         //   }
             
             while (!bids.isEmpty() && !asks.isEmpty()) {
                 Order bestBid = bids.get(0);
@@ -142,6 +156,11 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
                 if (bestBid.getPrice() >= bestAsk.getPrice()) {
                     double tradePrice = bestAsk.getPrice();
                     double tradeQuantity = Math.min(bestBid.getQuantity(), bestAsk.getQuantity());
+                    
+                    Instrument instrument = instruments.get(orderBook.getSymbol());
+                    if (instrument != null) {
+                        instrument.setCurrentPrice(tradePrice); // Trzisna cena postaje cena po kojoj je izvrsena trgovina
+                    }
                     
                     Trade trade = new Trade(
                         orderBook.getSymbol(),
@@ -171,7 +190,7 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
                         trade.getSellerId()
                     );
                     
-                    System.out.printf("[Server] TRADE: %s %.4f @ $%.2f (%s ↔ %s)%n",
+                    System.out.printf("[Server] TRADE: %s %.4f @ $%.2f (%s <-> %s)%n",
                             trade.getSymbol(),
                             trade.getQuantity(),
                             trade.getPrice(),
@@ -181,7 +200,7 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
                         break;
                     }
                 }
-            });
+        	}});
     }
     
     private void updateClientBalances(Trade trade) {
@@ -229,11 +248,13 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
             throw new RemoteException("Instrument not found: " + symbol);
         }
         
+        synchronized (orderBook) { //osiguravam da niko ne menja liste dok ih kopiram
         List<Order> orders = (side == OrderBookData.Side.BID) ? 
             new ArrayList<>(orderBook.getBids()) : 
             new ArrayList<>(orderBook.getAsks());
         
         return new OrderBookData(symbol, side, orders);
+        }
     }
     
     @Override
@@ -252,33 +273,52 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
         }
         
      // Provera balansa za BUY order
-        if (request.getSide() == Order.Side.BUY) {
-            double totalCost = request.getPrice() * request.getQuantity();
-            if (account.getBalance() < totalCost) {
-                return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
-                    String.format("Insufficient funds: need $%.2f, have $%.2f", totalCost, account.getBalance()));
-            }
-        } 
+       // if (request.getSide() == Order.Side.BUY) {
+         //   double totalCost = request.getPrice() * request.getQuantity();
+           // if (account.getBalance() < totalCost) {
+             //   return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
+               //     String.format("Insufficient funds: need $%.2f, have $%.2f", totalCost, account.getBalance()));
+         //   }
+       // } 
         // Provera kolicine za SELL order
-        else {
-            double available = account.getAssetBalance(request.getSymbol());
-            if (available < request.getQuantity()) {
-                return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
-                    String.format("Insufficient asset: need %.4f, have %.4f", request.getQuantity(), available));
-            }
-        }
+      //  else {
+        //    double available = account.getAssetBalance(request.getSymbol());
+          //  if (available < request.getQuantity()) {
+            //    return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
+              //      String.format("Insufficient asset: need %.4f, have %.4f", request.getQuantity(), available));
+        //    }
+       // }
         
         // Validacija minimalne cene
         if (request.getPrice() < 0.01) {
             return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
-                "Cena mora biti veca od $0.01");
+                "Price must be higher than $0.01");
         }
         
         // Validacija kolicine
         if (request.getQuantity() <= 0 || request.getQuantity() > 1000000) {
             return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
-                "Neispravna kolicina (min: 0.0001, max: 1,000,000)");
+                "Invalid quantity (min: 0.0001, max: 1,000,000)");
         }
+        
+        // Provera da li ima dovoljno sredstava u trenutku slanja
+        synchronized (account) {
+            if (request.getSide() == Order.Side.BUY) {
+                double totalCost = request.getPrice() * request.getQuantity();
+                if (account.getBalance() < totalCost) {
+                    return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
+                        String.format("Insufficient funds: need $%.2f, have $%.2f", 
+                            totalCost, account.getBalance()));
+                }
+            } else { // SELL
+                double available = account.getAssetBalance(request.getSymbol());
+                if (available < request.getQuantity()) {
+                    return new OrderConfirmation("", OrderConfirmation.Status.REJECTED,
+                        String.format("Insufficient asset: need %.4f, have %.4f", 
+                            request.getQuantity(), available));
+                }
+            }
+       
         
         // Kreiraj i dodaj order u order book
         Order order = new Order(
@@ -293,12 +333,16 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
         OrderBook orderBook = orderBooks.get(request.getSymbol().toUpperCase());
         orderBook.addOrder(order);
         
+        System.out.printf("[Server] ORDER: %s %s %.4f @ $%.2f from %s%n", 
+                request.getSide(), request.getSymbol(), request.getQuantity(), request.getPrice(), request.getClientId().substring(0,8));
+        
         return new OrderConfirmation(order.getId(), OrderConfirmation.Status.ACCEPTED, "");
+        }
     }
     
     @Override
     public List<Trade> getTradeHistory(String symbol, long simulationDayStart) throws RemoteException {
-    	System.out.printf("[Server] Zahtev za istorijom trgovina: %s, dan %d (start: %d min)%n",
+    	System.out.printf("[Server] Request for trade history: %s, dan %d (start: %d min)%n",
     	        symbol, simulationDayStart / (24 * 60), simulationDayStart);
     	long dayEnd = simulationDayStart + 24 * 60; // 24 sata = 1440 minuta
         
@@ -311,7 +355,15 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
     @Override
     public String registerClient(String clientName) throws RemoteException {
         String clientId = UUID.randomUUID().toString();
-        clientAccounts.put(clientId, new ClientAccount(clientId, clientName, 100000.0)); // $100k pocetni balance
+        ClientAccount account = new ClientAccount(clientId, clientName, 100000.0);
+        
+        // Da bi nesto prodali odmah, dajem im malo asseta
+        account.addAsset("BTC", 1.0);
+        account.addAsset("ETH", 10.0);
+        account.addAsset("SOL", 100.0);
+        account.addAsset("DOGE", 10000.0);
+        
+        clientAccounts.put(clientId, account); 
         System.out.println("[Server] New client registered: " + clientName + " (" + clientId.substring(0, 8) + "...)"); 
         return clientId;
     }
@@ -366,11 +418,11 @@ public class ExchangeServiceImpl extends UnicastRemoteObject implements Exchange
         }
         
         public List<Order> getBids() {
-            return Collections.unmodifiableList(bids);
+            return bids;
         }
         
         public List<Order> getAsks() {
-            return Collections.unmodifiableList(asks);
+            return asks;
         }
         
         public String getSymbol() {
